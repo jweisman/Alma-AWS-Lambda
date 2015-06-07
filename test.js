@@ -1,5 +1,5 @@
 // Our Lambda function fle is required 
-var CreateThumbnail = require('./thumbnail-example/CreateThumbnail.js');
+var CreateThumbnail = require('./CreateThumbnail/CreateThumbnail.js');
 
 // The Lambda context "done" function is called when complete with/without error
 var context = {
@@ -20,7 +20,7 @@ var event = {
                     name: 'almadtest'
                 },
                 object: {
-                    key: '01TEST/Pittsburgh-Black-and-White.jpg'
+                    key: '01TEST/storage/pgh1890.jpg'
                 }
             }
         }

@@ -12,7 +12,7 @@ var util = require('util');
 var MAX_WIDTH  = 100;
 var MAX_HEIGHT = 100;
 var DST_BUCKET = 'exl-dev-scratch';
-var TOPIC = 'aws-alma';
+var TOPIC_NAME = 'aws-alma';
 
 // get reference to S3 client 
 var s3 = new AWS.S3();
@@ -28,7 +28,7 @@ exports.handler = function(event, context) {
     var srcKey    =
     decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));  
 	var dstBucket = DST_BUCKET;
-	var dstKey    = "thumbnails/" + srcKey + ".thumb";
+	var dstKey    = "thumbnails/" + srcKey;
 	var region    = "us-east-1"; // default
 
 	// Sanity check: validate that source and destination are different buckets.
@@ -125,8 +125,8 @@ exports.handler = function(event, context) {
 				  else {
 					  console.log(data);
 					  for (var i = 0; i < data.Topics.length; i++) {
-						  console.log(data.Topics[i].TopicArn.indexOf(TOPIC) );
-						  if (data.Topics[i].TopicArn.indexOf(TOPIC) >=0)
+						  console.log(data.Topics[i].TopicArn.indexOf(TOPIC_NAME) );
+						  if (data.Topics[i].TopicArn.indexOf(TOPIC_NAME) >=0)
 						  	{ topicArn = data.Topics[i].TopicArn; break;}
 					  }
 					  //topicArn = data.Topics[TOPIC].TopicArn;
