@@ -50,8 +50,16 @@ function receiveMessages(err, data) {
 function processMessage(message) {
 	var msgObj = JSON.parse(message.Body);
 	// Process
-	log(msgObj.Message);
+	log('message: ' + msgObj.Message);
 	var msg = JSON.parse(msgObj.Message);
+	// Validate institution
+	var inst = msgObj.MessageAttributes['inst'].Value;
+	// Look up institution in instance
+	if (inst != '01TEST') { 
+		log('Institution not found in this instance: ' + inst);
+		deleteMessage(message.ReceiptHandle);
+		return;
+	}
 	switch (msg.action) {
 		case 'receiveThumbnail':
 			receiveThumbnail(msg.bucket, msg.key, deleteMessage(message.ReceiptHandle));
@@ -122,7 +130,7 @@ function log(msg) {
 // get queue url
 sqs.getQueueUrl( { QueueName : q_name }, function(err, data) {
 	if (err) {
-		// if queue does not exist, create it and subscribe to 
+		// TODO: if queue does not exist, create it and subscribe to 
 		log(err);
 	} else {  
 		q_url = data.QueueUrl;

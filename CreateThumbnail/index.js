@@ -30,6 +30,7 @@ exports.handler = function(event, context) {
 	var dstBucket = DST_BUCKET;
 	var dstKey    = "thumbnails/" + srcKey;
 	var region    = "us-east-1"; // default
+	var inst 	  = srcKey.substring(0,srcKey.indexOf('/'));
 
 	// Sanity check: validate that source and destination are different buckets.
 	if (srcBucket == dstBucket) {
@@ -50,12 +51,14 @@ exports.handler = function(event, context) {
 		console.error('unable to infer image type for key ' + srcKey);
 		return;
 	}
-	var imageType = typeMatch[1];
+	var imageType = typeMatch[1].toLowerCase();
 	if (imageType != "jpg" && imageType != "png") {
 		console.log('skipping non-image ' + srcKey);
 		return;
 	}
-
+	
+	// If thumbnail already provided by user, skip?
+	
 	// Download the image from S3, transform, and upload to a different S3 bucket.
 	async.waterfall([
 		function getRegion(next) {
@@ -138,6 +141,7 @@ exports.handler = function(event, context) {
 		function sendMessage(next) {
 			console.log('sending message');
 			var sns = new AWS.SNS();
+			// Set message propterties
 			var params = {
 			  Message: JSON.stringify(
 				  {
@@ -146,6 +150,12 @@ exports.handler = function(event, context) {
 					  key: dstKey
 				  }
 			  ),
+			  MessageAttributes: {
+			    inst: {
+			      DataType: 'String', 
+			      StringValue: inst
+			  	},
+			  },			  
 			  TopicArn: topicArn
 			};
 			sns.publish(params, next);
