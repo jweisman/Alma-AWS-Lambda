@@ -7,6 +7,10 @@ var AWS = require('aws-sdk');
 var gm = require('gm')
             .subClass({ imageMagick: true }); // Enable ImageMagick integration.
 var util = require('util');
+var fs  = require('fs');
+var child_process = require('child_process');
+
+process.env['PATH'] += ':' + process.env['LAMBDA_TASK_ROOT'];
 
 // constants
 var MAX_WIDTH  = 100;
@@ -29,6 +33,7 @@ exports.handler = function(event, context) {
     decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));  
 	var dstBucket = DST_BUCKET;
 	var dstKey    = "thumbnails/" + srcKey;
+	var downloadPath = "/tmp/" + srcKey.replace(/\//g,'-');
 	var region    = "us-east-1"; // default
 	var inst 	  = srcKey.substring(0,srcKey.indexOf('/'));
 
@@ -45,16 +50,28 @@ exports.handler = function(event, context) {
 		return;		
 	}
 
-	// Infer the image type.
+	// Infer the file type.
 	var typeMatch = srcKey.match(/\.([^.]*)$/);
 	if (!typeMatch) {
-		console.error('unable to infer image type for key ' + srcKey);
+		console.error('unable to infer file type for key ' + srcKey);
 		return;
 	}
-	var imageType = typeMatch[1].toLowerCase();
-	if (imageType != "jpg" && imageType != "png") {
-		console.log('skipping non-image ' + srcKey);
-		return;
+	var fileExt = typeMatch[1].toLowerCase();
+	var fileType;
+	
+	switch (fileExt) {
+		case "jpg":
+		case "png":
+			fileType = 'image';
+			break;
+		case "mp4":
+		case "wav":
+		case "m4v":
+			fileType = "video";
+			break;
+		default:
+			console.log('skipping unknown file type ' + srcKey);
+			return;
 	}
 	
 	// If thumbnail already provided by user, skip?
@@ -75,16 +92,52 @@ exports.handler = function(event, context) {
 				}
 			});
 		},		
+		// Download the file into a file stream
 		function download(next) {
-			// Download the image from S3 into a buffer.
+			console.log('downloading file and writing to ' + downloadPath);
+			var file = fs.createWriteStream(downloadPath);
+			file.on('error', function(err) { next(err); });
+			file.on('close', function() { next();});
 			s3.getObject({
-					Bucket: srcBucket,
-					Key: srcKey
-				},
-				next);
+				Bucket: srcBucket,
+				Key: srcKey
+			}).createReadStream().pipe(file);	
 			},
-		function tranform(response, next) {
-			gm(response.Body).size(function(err, size) {
+		// do any file pre-processing here (videos, Office files, etc.)			
+		function preProcess(next) {
+			if (fileType == 'video') {
+
+				console.log('starting ffmpeg on ' + downloadPath +
+					' filesize ' +  fs.statSync(downloadPath)["size"]);
+				child_process.execFile(
+					'./ffmpeg',
+					[
+						'-i', downloadPath,
+						'-ss', '00:00:01',
+						'-vframes', '1',
+						'-n',
+						downloadPath + ".png"
+					],
+					null,
+					function (err, stdout, stderr) {
+						if (err) {
+							console.log('ffmpeg Error: ' + err);
+							next(err);
+						} else {
+							console.log('ffmpeg finished');
+							var fileToDelete = downloadPath;
+							downloadPath += ".png";
+							console.log('deleting ' + fileToDelete);
+							fs.unlink(fileToDelete, next);							
+						}
+					});			
+				
+			} else next();
+		},
+		// Create thumbnail		
+		function transform(next) {
+			console.log('starting to create thumbnail for ' + downloadPath);
+			gm(downloadPath).size(function(err, size) {
 				// Infer the scaling factor to avoid stretching the image unnaturally.
 				var scalingFactor = Math.min(
 					MAX_WIDTH / size.width,
@@ -92,33 +145,32 @@ exports.handler = function(event, context) {
 				);
 				var width  = scalingFactor * size.width;
 				var height = scalingFactor * size.height;
-
+				
 				// Transform the image buffer in memory.
 				this.resize(width, height)
-					.toBuffer(imageType, function(err, buffer) {
-						if (err) {
-							next(err);
-						} else {
-							next(null, response.ContentType, buffer);
-						}
+					.toBuffer(downloadPath.substr(downloadPath.lastIndexOf('.')+1), 
+					function(err, buffer) {
+						if (err) next(err);
+						else next(null, "application/jpg", buffer);
 					});
 			});
 		},
+		// Stream the transformed image to a different S3 bucket.		
 		function upload(contentType, data, next) {
-			// Stream the transformed image to a different S3 bucket.
 			console.log('uploading image');
 			s3.putObject({
 					Bucket: dstBucket,
 					Key: dstKey,
 					Body: data,
 					ContentType: contentType
-				}, // why can't we just pass next into putObject?
-				function(err, data) {
+				},
+				function (err, data) {
 					if (err) next(err);
-					else next();
-				}
+					else fs.unlink(downloadPath, next)		
+				}			
 			);
 		},
+		// Get topic queue name
 		function getTopicArn(next) {
 			console.log('getting topic arn');
 			var sns = new AWS.SNS();
@@ -126,18 +178,16 @@ exports.handler = function(event, context) {
 				function(err, data) {
 				  if (err) next(err);
 				  else {
-					  console.log(data);
 					  for (var i = 0; i < data.Topics.length; i++) {
-						  console.log(data.Topics[i].TopicArn.indexOf(TOPIC_NAME) );
 						  if (data.Topics[i].TopicArn.indexOf(TOPIC_NAME) >=0)
 						  	{ topicArn = data.Topics[i].TopicArn; break;}
 					  }
-					  //topicArn = data.Topics[TOPIC].TopicArn;
-					  console.log(topicArn);
-					  next();
+					  console.log('topic Arn ' + topicArn);
+					  next(null);
 				  }
 				});			
 		},
+		// Send message to topic queue
 		function sendMessage(next) {
 			console.log('sending message');
 			var sns = new AWS.SNS();
