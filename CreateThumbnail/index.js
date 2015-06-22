@@ -16,26 +16,33 @@ process.env['PATH'] += ':' + process.env['LAMBDA_TASK_ROOT'];
 var MAX_WIDTH  = 100;
 var MAX_HEIGHT = 100;
 var DST_BUCKET = 'exl-dev-scratch';
-var TOPIC_NAME = 'aws-alma';
 
 // get reference to S3 client 
 var s3 = new AWS.S3();
 
-// global variables
-var topicArn;
+// Expects an event in the following format:
+/*
+{
+	bucket: BUCKET_NAME,
+	key:    KEY,
+	returnQ: RETURN_Q_NAME // optional
+}
+*/
  
 exports.handler = function(event, context) {
 	// Read options from the event.
 	console.log("Reading options from event:\n", util.inspect(event, {depth: 5}));
-	var srcBucket = event.Records[0].s3.bucket.name;
+	var srcBucket = event.bucket;
 	// Object key may have spaces or unicode non-ASCII characters.
     var srcKey    =
-    decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));  
+    decodeURIComponent(event.key.replace(/\+/g, " "));  
+	var queue = event.returnQ;
 	var dstBucket = DST_BUCKET;
 	var dstKey    = "thumbnails/" + srcKey;
 	var downloadPath = "/tmp/" + srcKey.replace(/\//g,'-');
 	var region    = "us-east-1"; // default
 	var inst 	  = srcKey.substring(0,srcKey.indexOf('/'));
+	var response;
 
 	// Sanity check: validate that source and destination are different buckets.
 	if (srcBucket == dstBucket) {
@@ -73,8 +80,6 @@ exports.handler = function(event, context) {
 			console.log('skipping unknown file type ' + srcKey);
 			return;
 	}
-	
-	// If thumbnail already provided by user, skip?
 	
 	// Download the image from S3, transform, and upload to a different S3 bucket.
 	async.waterfall([
@@ -170,45 +175,46 @@ exports.handler = function(event, context) {
 				}			
 			);
 		},
-		// Get topic queue name
-		function getTopicArn(next) {
-			console.log('getting topic arn');
-			var sns = new AWS.SNS();
-			sns.listTopics( null, 
-				function(err, data) {
-				  if (err) next(err);
-				  else {
-					  for (var i = 0; i < data.Topics.length; i++) {
-						  if (data.Topics[i].TopicArn.indexOf(TOPIC_NAME) >=0)
-						  	{ topicArn = data.Topics[i].TopicArn; break;}
-					  }
-					  console.log('topic Arn ' + topicArn);
-					  next(null);
-				  }
-				});			
+		// Get queue name if defined
+		function getQueueUrl(next) {
+			if (queue) {
+				console.log('getting queue url');
+				var sqs = new AWS.SQS();
+				sqs.getQueueUrl( {QueueName: queue},
+					function(err,data) {
+						if (err) next(err);
+						else { 
+							queue = data.QueueUrl; 
+							console.log('queue url ', queue);
+							next(null); 
+						}
+					});
+			} else next(null);
 		},
-		// Send message to topic queue
+		// Send message to queue
 		function sendMessage(next) {
-			console.log('sending message');
-			var sns = new AWS.SNS();
-			// Set message propterties
-			var params = {
-			  Message: JSON.stringify(
-				  {
+			// prepare response
+			response = {
 					  action: 'receiveThumbnail',
 					  bucket: dstBucket,
 					  key: dstKey
-				  }
-			  ),
-			  MessageAttributes: {
-			    inst: {
-			      DataType: 'String', 
-			      StringValue: inst
-			  	},
-			  },			  
-			  TopicArn: topicArn
-			};
-			sns.publish(params, next);
+				  };			
+			if (queue) {
+				console.log('sending message');
+				var sqs = new AWS.SQS();
+				// Set message propterties
+				var params = {
+				  MessageBody: JSON.stringify(response),
+				  MessageAttributes: {
+				    inst: {
+				      DataType: 'String', 
+				      StringValue: inst
+				  	},
+				  },			  
+				  QueueUrl: queue
+				};
+				sqs.sendMessage(params, next);
+			} else next(null);
 		}
 		], function (err) {
 			if (err) {
@@ -223,7 +229,7 @@ exports.handler = function(event, context) {
 					' and uploaded to ' + dstBucket + '/' + dstKey
 				);
 			}
-			context.done();
+			context.done(err,response);
 		}
 	);
 };

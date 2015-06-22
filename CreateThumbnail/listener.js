@@ -34,7 +34,7 @@ function listen() {
 			"MaxNumberOfMessages": 10,
 			"VisibilityTimeout": 30,				
 			"QueueUrl": q_url,
-			"AttributeNames": ["inst"]
+			"MessageAttributeNames": ["inst"]
 		}, receiveMessages);	
 }	
 
@@ -48,12 +48,10 @@ function receiveMessages(err, data) {
 }
 
 function processMessage(message) {
-	var msgObj = JSON.parse(message.Body);
+	var msg = JSON.parse(message.Body);
 	// Process
-	log('message: ' + msgObj.Message);
-	var msg = JSON.parse(msgObj.Message);
 	// Validate institution
-	var inst = msgObj.MessageAttributes['inst'].Value;
+	var inst = message.MessageAttributes.inst.StringValue;
 	// Look up institution in instance
 	if (inst != '01TEST') { 
 		log('Institution not found in this instance: ' + inst);
@@ -79,6 +77,8 @@ function deleteMessage(handle) {
 
 function receiveThumbnail(bucket, key, callback) {
 	log('receiving thumbnail ' + bucket + ", " + key);
+	// TODO: Check if thumbnail exists for this image (user uploaded) and ignore
+	
 	async.waterfall([
 		function download(next) {
 			// Download the image from S3 into a buffer.
