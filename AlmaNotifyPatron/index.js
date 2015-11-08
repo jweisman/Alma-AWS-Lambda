@@ -73,9 +73,9 @@ function sendSms(to, msg, callback) {
 exports.handler = function(event, context) {
 	async.waterfall([
 		function (next) {
-			//alma.getXml('/analytics/reports?path=%2Fshared%2FCommunity%2FReports%2FShared%20Reports%2FReports%2FFulfillment%20-%20Misc.%20reports%2FEx%20Libris%20-%20Loans%20due%20tomorrow%20with%20patron%20and%20item%20information',
-			//	next);
-			fs.readFile('./report.xml', "utf-8", next);
+			alma.getXml('/analytics/reports?path=%2Fshared%2FCommunity%2FReports%2FShared%20Reports%2FReports%2FFulfillment%20-%20Misc.%20reports%2FEx%20Libris%20-%20Loans%20due%20tomorrow%20with%20patron%20and%20item%20information',
+				next);
+			//fs.readFile('./report.xml', "utf-8", next);
 		},
 		function (data, next) {
 			var doc = new dom().parseFromString(data);
