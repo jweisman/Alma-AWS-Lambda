@@ -1,0 +1,14 @@
+{
+  "name": "alma-notify-patron",
+  "version": "1.0.0",
+  "description": "Run as a scheduled Lambda job to send notifications to Alma patrons",
+  "dependencies": {
+    "async": "^1.5.0",
+    "nconf": "^0.8.2",
+    "xmldom": "^0.1.19",
+    "xml2js": "^0.4.15",
+    "twilio": "^2.5.2",
+    "request": "^2.65.0",
+    "xpath": "^0.0.9"
+  }
+}

@@ -1,4 +1,6 @@
 *.zip
+config.json
 CreateThumbnail/ffmpeg
 
 CreateThumbnail/ffprobe
+node_modules
