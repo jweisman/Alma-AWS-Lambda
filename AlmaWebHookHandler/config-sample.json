@@ -1,0 +1,8 @@
+{ 
+	"alma_host": "https://api-na.hosted.exlibrisgroup.com",
+	"alma_path": "/almaws/v1", 
+	"api_key":   "{API_KEY}",
+	"twilio_account": "",
+	"twilio_token": "",
+	"twilio_number": ""
+}

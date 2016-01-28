@@ -1,0 +1,11 @@
+{
+  "name": "alma-webhook-handler",
+  "version": "1.0.0",
+  "description": "Handle webhook calls from Alma",
+  "dependencies": {
+    "async": "^1.5.0",
+    "nconf": "^0.8.2",
+    "twilio": "^2.5.2",
+    "request": "^2.65.0"
+  }
+}
