@@ -21,11 +21,21 @@ You can test this Lambda function via the API Gateway by calling the following s
 ```ruby
 require 'rest-client'
 require 'base64'
+require 'securerandom'
+
+KEY = "{KEY}"
+URL = "{URL}"
 
 to = ARGV[0]
 msg = ARGV[1]
 
 abort "Invalid number of parameters" unless to && msg
+
+puts "Challenging server at #{URL}"
+challenge = SecureRandom.uuid
+abort "Server didn't respond to challenge" unless
+	RestClient.get("#{URL}?challenge=#{challenge}")
+		.include? challenge
 
 req = {
 	"action": "sms",
@@ -35,12 +45,14 @@ req = {
 		}
 	}.to_json
 
-key="hello"
 digest = OpenSSL::Digest.new('sha256')
-hmac = Base64.encode64(OpenSSL::HMAC.digest(digest, key, req))
+hmac = Base64.encode64(OpenSSL::HMAC.digest(digest, KEY, req))
 
-RestClient.post "https://[GATEWAY URL]/almawebhooks",
+puts "Posting to server"
+RestClient.post URL,
 	req,
 	content_type: :json,
 	"X-Exl-Signature": hmac
+
+puts "Done"
 ```

@@ -1,9 +1,5 @@
 // dependencies
 var async = require('async');
-var AWS = require('aws-sdk');
-var util = require('util');
-var alma = require('./alma.js');
-var twilio = require('twilio');
 var nconf = require('nconf');
 var crypto = require('crypto');
 
@@ -11,30 +7,10 @@ var crypto = require('crypto');
 nconf.env()
    .file({ file: './config.json' });
 
-// Twilio setup
-var twilio_account = nconf.get('twilio_account');
-var twilio_token = nconf.get('twilio_token');
-var twilio_number = nconf.get('twilio_number');
-var client = new twilio.RestClient(twilio_account, twilio_token);
-
-// *** 
-// Helper functions 
-//***
-
-function sendSms(to, msg, callback) {
-	console.log("Sending to " + to + ": " + msg);
-	client.sms.messages.create({
-		to: to,
-		from: twilio_number,
-		body: msg	
-	}, callback);
-}
-
 // *** 
 // Lambda function
 // ***
 
-var resp = {};
 var secret = nconf.get('secret');
 
 exports.handler = function(event, context) {
@@ -48,21 +24,18 @@ exports.handler = function(event, context) {
 			else next(null, body)
 		},
 		function routeMessage(data, next) {
-		  switch(data.action) {
-		    case 'challenge':
-	        if (!data.challenge) context.fail("Invalid challenge")
-	        resp["challenge"] = data.challenge;
-	        break;
-		    case 'sms':
-					sendSms(data.sms.to, data.sms.msg, next);		    
-	        break;
-		    default:
-		      next("Invalid action")
-		  }
+			try {
+				var processor = require("./" + data.action + ".js");
+				processor.process(data, next);
+			} catch(err) {
+				if (err.code == 'MODULE_NOT_FOUND') 
+					next("Invalid action.");
+				else next(err);
+			}
 		},
 		], function (err, result) {
 				if (err) { console.error(err) }
-				context.done(err,resp);
+				context.done(err,"Done");
 			}
 		);
 };
