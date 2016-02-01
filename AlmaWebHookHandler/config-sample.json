@@ -4,5 +4,6 @@
 	"api_key":   "{API_KEY}",
 	"twilio_account": "",
 	"twilio_token": "",
-	"twilio_number": ""
+	"twilio_number": "",
+	"secret": ""
 }

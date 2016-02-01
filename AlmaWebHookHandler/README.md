@@ -34,25 +34,28 @@ abort "Invalid number of parameters" unless to && msg
 puts "Challenging server at #{URL}"
 challenge = SecureRandom.uuid
 abort "Server didn't respond to challenge" unless
-	RestClient.get("#{URL}?challenge=#{challenge}")
-		.include? challenge
+		RestClient.get("#{URL}?challenge=#{challenge}")
+			.include? challenge
 
 req = {
-	"action": "sms",
-	"sms": {
-		"msg": msg,
-		"to": to
-		}
-	}.to_json
+    action: "sms",
+    sms: {
+        msg: msg,
+        to: to
+        }
+    }.to_json
 
 digest = OpenSSL::Digest.new('sha256')
 hmac = Base64.encode64(OpenSSL::HMAC.digest(digest, KEY, req))
 
 puts "Posting to server"
-RestClient.post URL,
-	req,
-	content_type: :json,
-	"X-Exl-Signature": hmac
-
-puts "Done"
+begin
+    RestClient.post URL,
+        req,
+        content_type: :json,
+        "X-Exl-Signature" => hmac
+    puts "Done"
+rescue => e
+    puts "ERROR: #{e.http_code} #{e.response}"
+end
 ```
