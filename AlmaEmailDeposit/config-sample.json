@@ -1,0 +1,12 @@
+{ 
+	"alma_host": "https://api-na.hosted.exlibrisgroup.com",
+	"alma_path": "/almaws/v1", 
+	"api_key":   "{API_KEY}",
+	"sworduri":  "http://almasword-poc.elasticbeanstalk.com/col/238593350000561",
+	"smtp_host": "email-smtp.us-east-1.amazonaws.com",
+	"smtp_user": "USER",
+	"smtp_pass": "PASSWORD",
+	"smtp_from": "deposit@from.com",
+	"deposit_url": "DEPOSIT URL"
+
+}

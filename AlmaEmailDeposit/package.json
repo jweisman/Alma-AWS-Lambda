@@ -1,0 +1,16 @@
+{
+  "name": "alma-email-deposit",
+  "version": "1.0.0",
+  "description": "Send email deposits to Alma via SWORD",
+  "dependencies": {
+    "async": "^1.5.0",
+    "nconf": "^0.8.2",
+    "request": "^2.65.0",
+    "mailparser": "^0.5.3",
+    "node-uuid": "^1.4.7",
+    "archiver": "~1.0.0",
+    "nodemailer": "~2.4.1",
+    "xmldom": "~0.1.2",
+    "xmlbuilder": "~8.2.2"
+  }
+}

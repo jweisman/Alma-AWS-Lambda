@@ -1,6 +1,7 @@
 *.zip
+test.*
 config.json
-CreateThumbnail/ffmpeg
-
-CreateThumbnail/ffprobe
-node_modules
+node_modules/
+CreateThumbnail/binaries/*
+!CreateThumbnail/binaries/linux
+!CreateThumbnail/binaries/mac
