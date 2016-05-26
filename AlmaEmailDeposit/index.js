@@ -1,161 +1,193 @@
 // dependencies
 var async = require('async');
 var nconf = require('nconf');
-var crypto = require('crypto');
 var fs = require("fs");
-var alma = require('./alma.js');
-var utils = require('./utils.js');
 var path = require('path');
 var request = require('request');
-
-var CRLF = '\r\n';
+var alma = require('./alma.js');
+var utils = require('./utils.js');
+var verifyUser = require('./verifyUser.js');
+var messages = require('./messages.js');
 
 // Load configuration
 nconf.env()
-   .file({ file: './config.json' });
-
-var mailParser = require("./parse_email.js");
+  .file({
+    file: './config.json'
+  });
 
 var apikey = nconf.get('api_key');
 var sworduri = nconf.get('sworduri');
+var verification = nconf.get('verification');
+var bucket = nconf.get("bucket");
+var prefix = nconf.get("prefix");
+var emailOpts = nconf.get('emailOpts');
 
-var bucketName = "exl-dev-scratch";
-var prefix = "email/deposit/"
-var tmpDir 		= "/tmp/"; 
-
-var emailOptions = {
-	host:	nconf.get('smtp_host'), 
-  user:	nconf.get('smtp_user'), 
-  pass:	nconf.get('smtp_pass'), 
-  from:	nconf.get('smtp_from')
-}
+var tmpDir = "/tmp/";
 
 exports.handler = function(event, context) {
-	var _userId;
-	var _email;
+  var user;
+  var email;
 
-  console.log('Processing email');
+  var finalCallback = function(err, result) {
+    if (err) {
+      console.error(err);
+    }
+    context.done(err, "Done");
+  };
+
+  // called from token verification?
+  if (event.token) {
+    return verifyUser.verify(event.token, finalCallback)
+  }
+
   var sesNotification = event.Records[0].ses;
   var messageId = sesNotification.mail.messageId;
 
-	async.waterfall([  
-    // Retrieve the email from your bucket
-    function getFile(next) {
-    	utils.downloadFile(bucketName, prefix + messageId, 
-    		tmpDir, next);
-  	},
-  	function parseMail(filename, next) {
-  		console.log('parsing email', filename);
-  		mailParser.parseEmail(filename, next);
-  	},
-  	function getUser(mail, next) {
-  		_email = mail;
-  		console.log("Searching for user with email ", _email.from, _email.subject);
-  		alma.get("/users?q=email~" + _email.from.toLowerCase(), next);
-  	},
-  	function validateUser(resp, next) {
-  		if (resp.total_record_count == 0) {
-	  		utils.sendEmail(
-	  			emailOptions,
-	  			_email.from, 
-	  			"Re: " + _email.subject,
-	  			"Hi. Just wanted to let you know that your " +
-	  			  "email address was not recognized so " +
-	  			  "we could not process your deposit.", 
-	  			function(err) { context.done(err || "USER_NOT_FOUND"); }
-	  		);							
-			} else {
-  			console.log("User found:", resp.user[0].primary_id);
-  			_userId = resp.user[0].primary_id;
-  			next();
-  		}
-  	},
-  	function zipFiles(next) {
-  		if (_email.attachments.length == 0) 
-  			next("No attachment found");
-  		else	
-  			utils.zip(_email.attachments, path.join(tmpDir, messageId + ".zip"), next);
-  	},
-  	function sendRequest(zip, next) {
-			var md = getEntry(
-				_email.from, _email.subject, _email.text
-			);
+  async.waterfall(
+    [
+      // Retrieve the email from your bucket
+      function getFile(next) {
+        utils.downloadFile(bucket, prefix + messageId,
+          tmpDir, next);
+      },
+      function parseMail(filename, next) {
+        console.log('parsing email', filename);
+        utils.parseEmail(filename, next);
+      },
+      function getUser(mail, next) {
+        email = mail;
+        console.log("Searching for user with email ", email.from);
+        alma.get("/users?q=email~" + email.from, next);
+      },
+      function validateUser(resp, next) {
+        if (resp.total_record_count == 0) {
+          utils.sendEmail(
+            emailOpts,
+            email.from,
+            "Re: " + email.subject,
+            messages.getMessage('user_not_found'),
+            function(err) {
+              context.done(err || "USER_NOT_FOUND");
+            }
+          );
+        } else {
+          console.log("User found:", resp.user[0].primary_id);
+          user = resp.user[0];
+          next();
+        }
+      },
+      function verify(next) {
+        // no verification routine specified
+        if (!verification) {
+          next(null);
+        }
 
-			console.log("md", md);
-  		headers = {
-  			"In-Progress": false,
-  			"On-behalf-of": _userId
-  		}
-  		console.log("Headers: ", JSON.stringify(headers, null, 2));
+        verifyUser.isUserVerified(email.from, function(res) {
+          if (res) {
+            console.log('user verified', email.from);
+            next(null);
+          } else {
+            console.log('user not verified', email.from);
+            utils.sendEmail(
+              emailOpts,
+              email.from,
+              "Re: " + email.subject,
+              messages.getMessage('verification',
+                user.first_name,
+                verifyUser.tokenLink(email.from, messageId)
+              ),
+              function(err) {
+                console.log('sent verification email');
+                next(err || "USER_NOT_VERIFIED");
+              }
+            );
+          }
+        });
+      },
+      function zipFiles(next) {
+        if (email.attachments.length == 0)
+          next("No attachment found");
+        else
+          utils.zip(email.attachments, path.join(tmpDir, messageId + ".zip"), next);
+      },
+      function sendRequest(zip, next) {
+        var md = getEntry(
+          user.first_name + " " + user.last_name,
+          email.subject, email.text
+        );
 
-  		var options = {
-  			url: sworduri,
-  			method: 'POST',
-				auth: {
-					user: 'sword',
-					pass: apikey
-				},
-  			headers: headers,
-  			multipart: [
-		      {
-		        'content-type': 'application/atom+xml; charset="utf-8"',
-	        	'content-disposition': 'attachment; name=atom',
-		        body: md
-		      },
-		      {
-		      	'content-type': 'application/zip',
-		      	'content-disposition': 'attachment; name=payload; filename=' + path.basename(path.join(tmpDir, messageId + ".zip")),
-		      	'Content-Transfer-Encoding': 'base64',
-		      	'Packaging': 'http://purl.org/net/sword/package/SimpleZip',
-		      	body: utils.base64_encode(zip)
-		      }
-  			]
-  		};
-  		console.log('sending request')
-  		request(options, next);
-		},
-  	function processResponse(response, body, next) {
-  		console.log("processing response");
-  		console.log(body);
-			var dom = require('xmldom').DOMParser
-			var doc = new dom().parseFromString(body)
-			var mms_id = doc.getElementsByTagName('verboseDescription')[0]
-				.childNodes[0].nodeValue;
- 			console.log("mms_id", mms_id);
- 			next(null, mms_id);
-		},
-		function sendEmail(mms_id, next) {
-			console.log("in sendEmail");
-  		utils.sendEmail(
-  			emailOptions,
-  			_email.from, 
-  			"Re: " + _email.subject,
-  			"Hi. Just wanted to let you know that your " +
-  			  "deposit has been processed. You can access it at " +
-  			  "the URL below. Thanks." + CRLF + CRLF +
-  			  nconf.get('deposit_url') + mms_id, 
-  			next
-  		);
-  	}
-		], function (err, result) {
-				if (err) { console.error(err); }
-				else context.done(err,"Done");
-			}
-		);
+        headers = {
+          "In-Progress": false,
+          "On-behalf-of": user.primary_id
+        }
+
+        var options = {
+          url: sworduri,
+          method: 'POST',
+          auth: {
+            user: 'sword',
+            pass: apikey
+          },
+          headers: headers,
+          multipart: [{
+            'content-type': 'application/atom+xml; charset="utf-8"',
+            'content-disposition': 'attachment; name=atom',
+            body: md
+          }, {
+            'content-type': 'application/zip',
+            'content-disposition': 'attachment; name=payload; filename=' + path.basename(path.join(tmpDir, messageId + ".zip")),
+            'Content-Transfer-Encoding': 'base64',
+            'Packaging': 'http://purl.org/net/sword/package/SimpleZip',
+            body: utils.base64_encode(zip)
+          }]
+        };
+        console.log('sending request')
+        request(options, next);
+      },
+      function processResponse(response, body, next) {
+        console.log("processing response");
+        var dom = require('xmldom').DOMParser
+        var doc = new dom().parseFromString(body)
+        var mms_id = doc.getElementsByTagName('verboseDescription')[0]
+          .childNodes[0].nodeValue;
+        console.log("mms_id", mms_id);
+        next(null, mms_id);
+      },
+      function sendEmail(mms_id, next) {
+        console.log("sending email response");
+        utils.sendEmail(
+          emailOpts,
+          email.from,
+          "Re: " + email.subject,
+          messages.getMessage('confirmation',
+            user.first_name,
+            nconf.get('deposit_url') + mms_id
+          ),
+          next
+        );
+      },
+      function deleteEmail(info, next) {
+        utils.deleteFile(bucket, prefix + messageId, next);
+      }
+    ],
+    finalCallback
+  );
 };
 
 function getEntry(creator, title, abstract) {
-	var builder = require('xmlbuilder');
-	var xml = builder.create("entry")
-	.att('xmlns', 'http://www.w3.org/2005/Atom')
-	.att('xmlns:dcterms', 'http://purl.org/dc/terms/');
-	xml.ele('title', title);
-	xml.ele('author')
-		.ele('name', creator);
-	xml.ele('summary', abstract);
-	xml.ele('dcterms:abstract', abstract);
-	xml.ele('dcterms:title', title);
-	xml.ele('dcterms:creator', creator);
-  
-  return xml.end({ pretty: true});
+  var builder = require('xmlbuilder');
+  var xml = builder.create("entry")
+    .att('xmlns', 'http://www.w3.org/2005/Atom')
+    .att('xmlns:dcterms', 'http://purl.org/dc/terms/');
+  xml.ele('title', title);
+  xml.ele('author')
+    .ele('name', creator);
+  xml.ele('summary', abstract);
+  xml.ele('dcterms:abstract', abstract);
+  xml.ele('dcterms:title', title);
+  xml.ele('dcterms:creator', creator);
+
+  return xml.end({
+    pretty: true
+  });
 }
