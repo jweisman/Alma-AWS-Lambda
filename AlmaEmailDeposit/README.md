@@ -1,6 +1,6 @@
 # Alma Email Deposit
 
-This proof of concept allows deposits to be made to Alma via email. This example Lambda receives an email from Amazon SES, validates it, can submits a deposit via [SWORD](https://github.com/jweisman/AlmaSwordServer).
+This proof of concept allows deposits to be made to Alma via email. This Lambda function is called when an email is received by Amazon SES. The function parses the mail, validates the user, and submits a deposit via the [SWORD](https://github.com/jweisman/AlmaSwordServer) create deposit request. 
 
 The process flow is illustrated below:
 
