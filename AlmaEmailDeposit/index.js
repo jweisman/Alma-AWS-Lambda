@@ -77,32 +77,32 @@ exports.handler = function(event, context) {
         }
       },
       function verify(next) {
-        // no verification routine specified
         if (!verification) {
+          console.log('no verification routine specified');
           next(null);
+        } else {
+          verifyUser.isUserVerified(email.from, function(res) {
+            if (res) {
+              console.log('user verified', email.from);
+              next(null);
+            } else {
+              console.log('user not verified', email.from);
+              utils.sendEmail(
+                emailOpts,
+                email.from,
+                "Re: " + email.subject,
+                messages.getMessage('verification',
+                  user.first_name,
+                  verifyUser.tokenLink(email.from, messageId)
+                ),
+                function(err) {
+                  console.log('sent verification email');
+                  next(err || "USER_NOT_VERIFIED");
+                }
+              );
+            }
+          });
         }
-
-        verifyUser.isUserVerified(email.from, function(res) {
-          if (res) {
-            console.log('user verified', email.from);
-            next(null);
-          } else {
-            console.log('user not verified', email.from);
-            utils.sendEmail(
-              emailOpts,
-              email.from,
-              "Re: " + email.subject,
-              messages.getMessage('verification',
-                user.first_name,
-                verifyUser.tokenLink(email.from, messageId)
-              ),
-              function(err) {
-                console.log('sent verification email');
-                next(err || "USER_NOT_VERIFIED");
-              }
-            );
-          }
-        });
       },
       function zipFiles(next) {
         if (email.attachments.length == 0)
@@ -138,6 +138,7 @@ exports.handler = function(event, context) {
             'content-disposition': 'attachment; name=payload; filename=' + path.basename(path.join(tmpDir, messageId + ".zip")),
             'Content-Transfer-Encoding': 'base64',
             'Packaging': 'http://purl.org/net/sword/package/SimpleZip',
+            'Content-MD5': utils.checksum(zip),
             body: utils.base64_encode(zip)
           }]
         };
@@ -145,13 +146,18 @@ exports.handler = function(event, context) {
         request(options, next);
       },
       function processResponse(response, body, next) {
-        console.log("processing response");
-        var dom = require('xmldom').DOMParser
-        var doc = new dom().parseFromString(body)
-        var mms_id = doc.getElementsByTagName('verboseDescription')[0]
-          .childNodes[0].nodeValue;
-        console.log("mms_id", mms_id);
-        next(null, mms_id);
+        console.log("processing response", response.statusCode);
+        if (('' + response.statusCode).match(/^2\d\d$/)) {
+          var dom = require('xmldom').DOMParser
+          var doc = new dom().parseFromString(body)
+          var mms_id = doc.getElementsByTagName('verboseDescription')[0]
+            .childNodes[0].nodeValue;
+          console.log("mms_id", mms_id);
+          next(null, mms_id);
+        } else {
+          console.log('SWORD error', body);
+          next('SWORD Error-' + response.statusCode);
+        }
       },
       function sendEmail(mms_id, next) {
         console.log("sending email response");
