@@ -6,16 +6,18 @@ var async = require('async');
 var AWS = require('aws-sdk');
 var gm = require('gm')
             .subClass({ imageMagick: true }); // Enable ImageMagick integration.
-var util = require('util');
 var fs  = require('fs');
 var child_process = require('child_process');
 
 process.env['PATH'] += ':' + process.env['LAMBDA_TASK_ROOT'];
 
 // constants
-var MAX_WIDTH  = 100;
-var MAX_HEIGHT = 100;
-var DST_BUCKET = 'exl-dev-scratch';
+var MAX_WIDTH  = 200;
+var MAX_HEIGHT = 200;
+var THUMB_EXT = 'png';
+
+// TODO: Handle region
+AWS.config.update({region: process.env['AWS_DEFAULT_REGION'] || 'us-east-1'});
 
 // get reference to S3 client 
 var s3 = new AWS.S3();
@@ -25,44 +27,41 @@ var s3 = new AWS.S3();
 {
 	bucket: BUCKET_NAME,
 	key:    KEY,
-	returnQ: RETURN_Q_NAME // optional
+	destPrefix: DIRECTORY TO PLACE THUMBNAILS
+	scratch: DIRECTORY TO WRITE PDF FILES
 }
 */
+
+function exec(command, params, callback) {
+	child_process.execFile(
+		command, 
+		params,
+		null,
+		function (err, stdout, stderr) {
+			if (err) { console.error(command + ' Error: ' + err); }
+			callback(err);
+		}
+	);	
+}
  
 exports.handler = function(event, context) {
-	// Read options from the event.
-	console.log("Reading options from event:\n", util.inspect(event, {depth: 5}));
-	var srcBucket = event.bucket;
+	var bucket = event.bucket;
 	// Object key may have spaces or unicode non-ASCII characters.
-    var srcKey    =
+	var srcKey    =
     decodeURIComponent(event.key.replace(/\+/g, " "));  
-	var queue = event.returnQ;
-	var dstBucket = DST_BUCKET;
-	var dstKey    = "thumbnails/" + srcKey;
-	var downloadPath = "/tmp/" + srcKey.replace(/\//g,'-');
-	var region    = "us-east-1"; // default
-	var inst 	  = srcKey.substring(0,srcKey.indexOf('/'));
-	var response;
-
-	// Sanity check: validate that source and destination are different buckets.
-	if (srcBucket == dstBucket) {
-		console.error("Destination bucket must not match source bucket.");
-		return;
-	}
+	var dstKey    = event.destPrefix + srcKey + "." + THUMB_EXT;
+	var random 		= require('node-uuid').v4();
+	var tmpDir 		= "/tmp/";
+	var scratch 	= event.scratch;
+	var downloadPath;
 	
-	// Confirm file is in storage directory
-	var dirMatch = srcKey.match(/^([A-Z0-9\_])+\/storage\/\S/);
-	if (!dirMatch) {
-		console.log('skipping non-storage file ' + srcKey);
-		return;		
-	}
-
 	// Infer the file type.
 	var typeMatch = srcKey.match(/\.([^.]*)$/);
 	if (!typeMatch) {
-		console.error('unable to infer file type for key ' + srcKey);
+		console.error('Unable to infer file type for key ' + srcKey);
 		return;
 	}
+
 	var fileExt = typeMatch[1].toLowerCase();
 	var fileType;
 	
@@ -76,72 +75,105 @@ exports.handler = function(event, context) {
 		case "m4v":
 			fileType = "video";
 			break;
+		case "pdf":
+			fileType = "pdf";
+			break;
+		case "doc":
+		case "ppt":
+		case "docx":
+		case "pptx":
+			fileType = "office";
+			break;
 		default:
 			console.log('skipping unknown file type ' + srcKey);
 			return;
 	}
 	
-	// Download the image from S3, transform, and upload to a different S3 bucket.
-	async.waterfall([
-		function getRegion(next) {
-			console.log('Getting region.');
+	async.waterfall([		
+		// Convert Word/Powerpoint to PDF
+		function officeToPdf(next) {
+	 		if (fileType != 'office') return next();
+			console.log('Converting office file to PDF Lambda: ' + srcKey);
+			var lambda = new AWS.Lambda();
+
 			var params = {
-  				Bucket: srcBucket
+			  FunctionName: 'PdfHandler', 
+			  InvocationType: 'RequestResponse',
+			  Payload: JSON.stringify({ 
+			  	bucket: bucket, 
+			  	key: srcKey,
+			  	destination: scratch + "pdf/" + random + "/"
+				})
 			};
-			s3.getBucketLocation(params, function(err, data) {
-			  if (err) next(err); // an error occurred
-			  else  {  
-				  if (data.LocationConstraint) region = data.LocationConstraint; 
-				  AWS.config.region = region;
-				  next(); 
-				}
+
+			lambda.invoke(params, function(err, data) {
+				console.log(data);
+				var resp = JSON.parse(data.Payload);
+				console.log("PDF conversion complete: " + resp.key);
+				srcKey = resp.key;
+				fileType = 'pdf';
+				next(err);
 			});
-		},		
+		},
 		// Download the file into a file stream
 		function download(next) {
+			downloadPath = tmpDir + srcKey.replace(/\//g,'-');
 			console.log('downloading file and writing to ' + downloadPath);
+			if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
 			var file = fs.createWriteStream(downloadPath);
 			file.on('error', function(err) { next(err); });
 			file.on('close', function() { next();});
 			s3.getObject({
-				Bucket: srcBucket,
+				Bucket: bucket,
 				Key: srcKey
 			}).createReadStream().pipe(file);	
-			},
-		// do any file pre-processing here (videos, Office files, etc.)			
+		},
 		function preProcess(next) {
-			if (fileType == 'video') {
+			var origFile;
+			async.waterfall([
+				// video --> image
+				function videoToImage(next) {
+					if (fileType != 'video') return next();
+					console.log('starting ffmpeg on ' + downloadPath);
+					origFile = downloadPath;
+					downloadPath += "." + THUMB_EXT
+					exec('./binaries/ffmpeg',
+						[
+							'-i', origFile,
+							'-ss', '00:00:01',
+							'-vframes', '1',
+							'-n',
+							downloadPath
+						], next
+					);
+				},
+				// PDF --> images
+				function pdfToImage(next) {
+					if (fileType != 'pdf') return next();
+					console.log('starting convert on ' + downloadPath);
+					origFile = downloadPath;
+					downloadPath += "." + THUMB_EXT;
 
-				console.log('starting ffmpeg on ' + downloadPath +
-					' filesize ' +  fs.statSync(downloadPath)["size"]);
-				child_process.execFile(
-					'./ffmpeg',
-					[
-						'-i', downloadPath,
-						'-ss', '00:00:01',
-						'-vframes', '1',
-						'-n',
-						downloadPath + ".png"
-					],
-					null,
-					function (err, stdout, stderr) {
-						if (err) {
-							console.log('ffmpeg Error: ' + err);
-							next(err);
-						} else {
-							console.log('ffmpeg finished');
-							var fileToDelete = downloadPath;
-							downloadPath += ".png";
-							console.log('deleting ' + fileToDelete);
-							fs.unlink(fileToDelete, next);							
-						}
-					});			
-				
-			} else next();
+					// convert -density 150 -flatten ~/Downloads/powerpoint.pdf[0] -quality 100 -sharpen 0x1.0 powerpoint.pdf.png
+					gm(origFile+"[0]") // The name of your pdf
+							.density(150)
+							.flatten()
+					    .setFormat(THUMB_EXT)
+					    .quality(100) // Quality from 0 to 100
+					    .write(downloadPath, next);
+				}
+			], function (err) { 
+				if (origFile != null) {
+					console.log('deleting ' + origFile);
+					fs.unlink(origFile, next);								
+				} else {
+					next(err)	
+				}
+			});
 		},
 		// Create thumbnail		
 		function transform(next) {
-			console.log('starting to create thumbnail for ' + downloadPath);
+			console.log('creating thumbnail for ' + downloadPath);
 			gm(downloadPath).size(function(err, size) {
 				// Infer the scaling factor to avoid stretching the image unnaturally.
 				var scalingFactor = Math.min(
@@ -153,83 +185,33 @@ exports.handler = function(event, context) {
 				
 				// Transform the image buffer in memory.
 				this.resize(width, height)
-					.toBuffer(downloadPath.substr(downloadPath.lastIndexOf('.')+1), 
+					.toBuffer(THUMB_EXT, 
 					function(err, buffer) {
 						if (err) next(err);
-						else next(null, "application/jpg", buffer);
+						else next(null, "application/" + THUMB_EXT, buffer);
 					});
 			});
 		},
-		// Stream the transformed image to a different S3 bucket.		
+		// Stream the transformed image to a new path		
 		function upload(contentType, data, next) {
-			console.log('uploading image');
+			console.log('uploading image to ' + dstKey);
 			s3.putObject({
-					Bucket: dstBucket,
+					Bucket: bucket,
 					Key: dstKey,
 					Body: data,
 					ContentType: contentType
 				},
 				function (err, data) {
 					if (err) next(err);
-					else fs.unlink(downloadPath, next)		
+					else {
+						fs.unlink(downloadPath, next);
+					}
 				}			
 			);
 		},
-		// Get queue name if defined
-		function getQueueUrl(next) {
-			if (queue) {
-				console.log('getting queue url');
-				var sqs = new AWS.SQS();
-				sqs.getQueueUrl( {QueueName: queue},
-					function(err,data) {
-						if (err) next(err);
-						else { 
-							queue = data.QueueUrl; 
-							console.log('queue url ', queue);
-							next(null); 
-						}
-					});
-			} else next(null);
-		},
-		// Send message to queue
-		function sendMessage(next) {
-			// prepare response
-			response = {
-					  action: 'receiveThumbnail',
-					  bucket: dstBucket,
-					  key: dstKey
-				  };			
-			if (queue) {
-				console.log('sending message');
-				var sqs = new AWS.SQS();
-				// Set message propterties
-				var params = {
-				  MessageBody: JSON.stringify(response),
-				  MessageAttributes: {
-				    inst: {
-				      DataType: 'String', 
-				      StringValue: inst
-				  	},
-				  },			  
-				  QueueUrl: queue
-				};
-				sqs.sendMessage(params, next);
-			} else next(null);
-		}
-		], function (err) {
-			if (err) {
-				console.error(
-					'Unable to resize ' + srcBucket + '/' + srcKey +
-					' and upload to ' + dstBucket + '/' + dstKey +
-					' due to an error: ' + err
-				);
-			} else {
-				console.log(
-					'Successfully resized ' + srcBucket + '/' + srcKey +
-					' and uploaded to ' + dstBucket + '/' + dstKey
-				);
-			}
-			context.done(err,response);
+		], function (err, response) {
+			if (err) { console.error(err) }
+			context.done(err,	dstKey);
 		}
 	);
 };

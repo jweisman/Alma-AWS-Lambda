@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<report>
+  <QueryResult>
+  <ResumptionToken>CB6EA0B5F927BCC3A5AF868348CE117356C490EF21D78C9C2A5D8639CCD0EA7DEAF81E8AF085AE4209831322B8157983163D8CC5881FFC5A208117904853089A</ResumptionToken>
+  <IsFinished>true</IsFinished>
+  <ResultXml>
+    <rowset xmlns="urn:schemas-microsoft-com:xml-analysis:rowset">
+      <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:saw-sql="urn:saw-sql" targetNamespace="urn:schemas-microsoft-com:xml-analysis:rowset">
+        <xsd:complexType name="Row">
+          <xsd:sequence>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column0" saw-sql:displayFormula="s_0" saw-sql:type="integer" type="xsd:int"/>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column1" saw-sql:displayFormula="s_1" saw-sql:type="varchar" type="xsd:string"/>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column2" saw-sql:displayFormula="s_2" saw-sql:type="varchar" type="xsd:string"/>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column3" saw-sql:displayFormula="s_3" saw-sql:type="varchar" type="xsd:string"/>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column4" saw-sql:displayFormula="s_4" saw-sql:type="date" type="xsd:date"/>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column5" saw-sql:displayFormula="s_5" saw-sql:type="varchar" type="xsd:string"/>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column6" saw-sql:displayFormula="s_6" saw-sql:type="varchar" type="xsd:string"/>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column7" saw-sql:displayFormula="s_7" saw-sql:type="varchar" type="xsd:string"/>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column8" saw-sql:displayFormula="s_8" saw-sql:type="varchar" type="xsd:string"/>
+            <xsd:element maxOccurs="1" minOccurs="0" name="Column9" saw-sql:displayFormula="s_9" saw-sql:type="varchar" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:schema>
+      <Row>
+        <Column0>0</Column0>
+        <Column1>Josh</Column1>
+        <Column2>Weisman</Column2>
+        <Column3>joshw</Column3>
+        <Column4>2015-11-08</Column4>
+        <Column5>20140710</Column5>
+        <Column6>josh.weisman@exlibrisgroup.com</Column6>
+        <Column8>+972544855121</Column8>
+        <Column9>History curatorship</Column9>
+      </Row>
+      <Row>
+        <Column0>0</Column0>
+        <Column1>Frank</Column1>
+        <Column2>Henry</Column2>
+        <Column3>frankh</Column3>
+        <Column4>2015-11-08</Column4>
+        <Column5>20140710</Column5>
+        <Column6>josh.weisman@exlibrisgroup.com</Column6>
+        <Column8>+972544855121</Column8>
+        <Column9>Love and War</Column9>
+      </Row>      
+      <Row>
+        <Column0>0</Column0>
+        <Column1>Josh</Column1>
+        <Column2>Weisman</Column2>
+        <Column3>joshw</Column3>
+        <Column4>2015-11-08</Column4>
+        <Column5>20140710</Column5>
+        <Column6>josh.weisman@exlibrisgroup.com</Column6>
+        <Column8>+972544855121</Column8>
+        <Column9>All You Wanted to Know</Column9>
+      </Row>
+    </rowset>
+  </ResultXml>
+</QueryResult>
+</report>

@@ -1,3 +1,17 @@
+# CreateThumbnail
+
+Creates a thumbnail of several types of files, including images, videos, PDFs, and Office files.
+
+This project uses several tools in order to create the thumbnails:
+* Videos: [ffmpeg](https://www.ffmpeg.org/), ffprobe
+* Office: [PdfHandler](../PdfHandler) Lambda function
+* PDFs: [ImageMagick](http://www.imagemagick.org/) 
+
+In order to run this sample, self-contained, statically compiled binaries appropriate for the target OS must be available in the `binaries` folder.
+
+The following test script can be used to execute the script locally and then download the resulting thumbnail.
+
+```javascript
 var AWS = require('aws-sdk');
 var CreateThumbnail = require('./index.js');
 
@@ -6,7 +20,7 @@ var context = {
   	if (err) { console.log(err) }
   	else { 
   		downloadThumbnail(result, 
-  			function() { console.log('success')	});		
+  			function() { process.exit(1);	});		
   	}
 	}
 }
@@ -20,7 +34,7 @@ function downloadThumbnail(request, callback) {
 			console.log('Writing thumbnail to ' + fileName);
 			var homeDir = 
 				(process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE);
-			var localFile = homeDir + "/Downloads/thumbnails/" + fileName;
+			var localFile = homeDir + "/Downloads/" + fileName;
 			require('fs').writeFile(localFile, data.Body,
 				function(err) {
 					if (err) console.log(err.message)
@@ -32,18 +46,10 @@ function downloadThumbnail(request, callback) {
 }
 
 var event = {
-	destPrefix: 	'scratch/thumbnails/',
-	scratch: 			'scratch/',
-	bucket: 			'almadtest',
-	key: 					'01TEST/storage/Pittsburgh-Black-and-White.jpg'
+	bucket: 'BUCKET',
+	key:    'KEY'
 };
 
 // Call the Lambda function
 CreateThumbnail.handler(event, context);
-
-// '01TEST/storage/Alma UX 2.0-Overview.pptx'
-// '01TEST/storage/Ingesting Digital Content at Scale.docx'
-// '01TEST/storage/Getting Started.pdf'
-// '01TEST/storage/bunny.mp4'
-// '01TEST/storage/Pittsburgh-Black-and-White.jpg'
-// '01TEST/storage/Small-mario.png'
+```

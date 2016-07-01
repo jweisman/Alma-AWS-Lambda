@@ -1,0 +1,32 @@
+apply plugin: 'java'
+apply plugin : 'eclipse' 
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile fileTree(dir: 'jars', include: '*.jar')
+    compile 'com.amazonaws:aws-lambda-java-core:1.1.0'
+    compile 'com.amazonaws:aws-lambda-java-events:1.1.0'
+    compile 'com.amazonaws:aws-java-sdk-core:1.10.43'
+    compile 'org.docx4j:docx4j:3.2.1'
+    compile 'org.apache.poi:poi:3.12'
+    compile 'org.apache.poi:poi-ooxml:3.12'
+    compile 'org.apache.poi:poi-scratchpad:3.12'
+    compile 'fr.opensagres.xdocreport:org.apache.poi.xwpf.converter.pdf:1.0.5'
+    compile 'com.itextpdf:itextpdf:5.5.6'
+    compile 'fr.opensagres.xdocreport:org.odftoolkit.odfdom.converter.pdf:1.0.5'
+    compile 'fr.opensagres.xdocreport:fr.opensagres.xdocreport.itext.extension:1.0.5'    
+
+}
+
+task buildZip(type: Zip) {
+    from compileJava
+    from processResources              
+    into('lib') {
+        from configurations.runtime
+    }           
+}
+
+build.dependsOn buildZip
