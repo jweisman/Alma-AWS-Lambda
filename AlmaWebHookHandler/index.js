@@ -14,6 +14,7 @@ nconf.env()
 var secret = nconf.get('secret');
 
 exports.handler = function(event, context) {
+	console.log("Message received: " + JSON.stringify(event.body));
 	async.waterfall([
 		function validateSignature(next) {
 			var body = event.body;
@@ -25,7 +26,7 @@ exports.handler = function(event, context) {
 		},
 		function routeMessage(data, next) {
 			try {
-				var processor = require("./" + data.action + ".js");
+				var processor = require("./" + data.action.toLowerCase() + ".js");
 				processor.process(data, next);
 			} catch(err) {
 				if (err.code == 'MODULE_NOT_FOUND') 
