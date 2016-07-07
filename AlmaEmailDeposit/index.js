@@ -61,13 +61,14 @@ exports.handler = function(event, context) {
       },
       function validateUser(resp, next) {
         if (resp.total_record_count == 0) {
+          console.log("User not found:", email.from)
           utils.sendEmail(
             emailOpts,
             email.from,
             "Re: " + email.subject,
             messages.getMessage('user_not_found'),
             function(err) {
-              context.done(err || "USER_NOT_FOUND");
+              finalCallback(err);
             }
           );
         } else {
@@ -97,7 +98,7 @@ exports.handler = function(event, context) {
                 ),
                 function(err) {
                   console.log('sent verification email');
-                  next(err || "USER_NOT_VERIFIED");
+                  finalCallback(err);
                 }
               );
             }
@@ -150,16 +151,16 @@ exports.handler = function(event, context) {
         if (('' + response.statusCode).match(/^2\d\d$/)) {
           var dom = require('xmldom').DOMParser
           var doc = new dom().parseFromString(body)
-          var mms_id = doc.getElementsByTagName('verboseDescription')[0]
-            .childNodes[0].nodeValue;
-          console.log("mms_id", mms_id);
-          next(null, mms_id);
+          var delivery_url = [].slice.call(doc.getElementsByTagName('link'))
+            .find(n=>n.getAttribute("rel")=="alternate")
+            .getAttribute("href");
+          next(null, delivery_url);
         } else {
           console.log('SWORD error', body);
           next('SWORD Error-' + response.statusCode);
         }
       },
-      function sendEmail(mms_id, next) {
+      function sendEmail(delivery_url, next) {
         console.log("sending email response");
         utils.sendEmail(
           emailOpts,
@@ -167,7 +168,7 @@ exports.handler = function(event, context) {
           "Re: " + email.subject,
           messages.getMessage('confirmation',
             user.first_name,
-            nconf.get('deposit_url') + mms_id
+            delivery_url
           ),
           next
         );
