@@ -26,9 +26,7 @@ var s3 = new AWS.S3();
 /*
 {
 	bucket: BUCKET_NAME,
-	key:    KEY,
-	destPrefix: DIRECTORY TO PLACE THUMBNAILS
-	scratch: DIRECTORY TO WRITE PDF FILES
+	key:    KEY
 }
 */
 
@@ -49,10 +47,9 @@ exports.handler = function(event, context) {
 	// Object key may have spaces or unicode non-ASCII characters.
 	var srcKey    =
     decodeURIComponent(event.key.replace(/\+/g, " "));  
-	var dstKey    = event.destPrefix + srcKey + "." + THUMB_EXT;
 	var random 		= require('node-uuid').v4();
 	var tmpDir 		= "/tmp/";
-	var scratch 	= event.scratch;
+	var scratch 	= "scratch/";
 	var downloadPath;
 	
 	// Infer the file type.
@@ -188,30 +185,17 @@ exports.handler = function(event, context) {
 					.toBuffer(THUMB_EXT, 
 					function(err, buffer) {
 						if (err) next(err);
-						else next(null, "application/" + THUMB_EXT, buffer);
+						else next(null, buffer);
 					});
 			});
-		},
-		// Stream the transformed image to a new path		
-		function upload(contentType, data, next) {
-			console.log('uploading image to ' + dstKey);
-			s3.putObject({
-					Bucket: bucket,
-					Key: dstKey,
-					Body: data,
-					ContentType: contentType
-				},
-				function (err, data) {
-					if (err) next(err);
-					else {
-						fs.unlink(downloadPath, next);
-					}
-				}			
-			);
-		},
-		], function (err, response) {
+		}
+		], function (err, buffer) {
 			if (err) { console.error(err) }
-			context.done(err,	dstKey);
+			context.done(err,	
+				{
+					fileType: THUMB_EXT, 
+					buffer: buffer.toString('base64')
+				});
 		}
 	);
 };
