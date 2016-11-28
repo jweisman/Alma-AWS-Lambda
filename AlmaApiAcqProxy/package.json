@@ -1,0 +1,12 @@
+{
+  "name": "alma-acq-api-proxy",
+  "version": "1.0.0",
+  "description": "Proxy Alma acquisitions API requests and add validation",
+  "private": true,
+  "dependencies": {
+    "jsonwebtoken": "^7.1.9",
+    "request": "^2.65.0",
+    "xmldom": "^0.1.24",
+    "xpath": "^0.0.9"
+  }
+}
