@@ -87,6 +87,18 @@ exports.handler = function(event, context) {
 	}
 	
 	async.waterfall([		
+		function checkSize(next) {
+			s3.headObject({
+				Bucket: bucket,
+				Key: srcKey
+			}, function(err, data) {
+				if (err) next(err);
+				else if (data.ContentLength > 500 * 1024 * 1024) {
+					console.log('skipping file > 500 MB', bucket, srcKey, data.ContentLength);
+					return;
+				} else next(null);
+			});
+		},
 		// Convert Word/Powerpoint to PDF
 		function officeToPdf(next) {
 	 		if (fileType != 'office') return next();
@@ -190,12 +202,17 @@ exports.handler = function(event, context) {
 			});
 		}
 		], function (err, buffer) {
-			if (err) { console.error(err) }
-			context.done(err,	
-				{
-					fileType: THUMB_EXT, 
-					buffer: buffer.toString('base64')
-				});
+			try { fs.unlinkSync(downloadPath); } 
+			catch(e) { console.log("Couldn't delete file", downloadPath, e); } // file is in temp dir anyway
+
+			if (err) { console.error(err); context.done(err); }
+			else {
+				context.done(err,	
+					{
+						fileType: THUMB_EXT, 
+						buffer: buffer.toString('base64')
+					});
+			}
 		}
 	);
 };
