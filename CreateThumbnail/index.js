@@ -16,11 +16,8 @@ var MAX_WIDTH  = 200;
 var MAX_HEIGHT = 200;
 var THUMB_EXT = 'png';
 
-// TODO: Handle region
+// Handle region
 AWS.config.update({region: process.env['AWS_DEFAULT_REGION'] || 'us-east-1'});
-
-// get reference to S3 client 
-var s3 = new AWS.S3();
 
 // Expects an event in the following format:
 /*
@@ -43,6 +40,7 @@ function exec(command, params, callback) {
 }
  
 exports.handler = function(event, context) {
+	var s3 = new AWS.S3();
 	var bucket = event.bucket;
 	// Object key may have spaces or unicode non-ASCII characters.
 	var srcKey    =
@@ -87,7 +85,11 @@ exports.handler = function(event, context) {
 	}
 	
 	async.waterfall([		
-		function checkSize(next) {
+		function getRegion(next) {
+			s3.getBucketLocation({Bucket: bucket}, next);
+		},
+		function checkSize(region, next) {
+			s3 = new AWS.S3({region: region.LocationConstraint});
 			s3.headObject({
 				Bucket: bucket,
 				Key: srcKey
@@ -202,11 +204,11 @@ exports.handler = function(event, context) {
 			});
 		}
 		], function (err, buffer) {
-			try { fs.unlinkSync(downloadPath); } 
-			catch(e) { console.log("Couldn't delete file", downloadPath, e); } // file is in temp dir anyway
-
 			if (err) { console.error(err); context.done(err); }
 			else {
+				try { fs.unlinkSync(downloadPath); } 
+				catch(e) { console.log("Couldn't delete file", downloadPath, e); } // file is in temp dir anyway
+
 				context.done(err,	
 					{
 						fileType: THUMB_EXT, 
