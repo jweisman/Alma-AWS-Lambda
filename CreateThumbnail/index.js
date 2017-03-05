@@ -222,8 +222,10 @@ exports.handler = function(event, context) {
 					MAX_WIDTH / size.width,
 					MAX_HEIGHT / size.height
 				);
-				returnObj.width = size.width;
-				returnObj.height = size.height;
+				if (fileType == 'image') {
+					returnObj.width = size.width;
+					returnObj.height = size.height;
+				}
 				var width  = scalingFactor * size.width;
 				var height = scalingFactor * size.height;
 				
