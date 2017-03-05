@@ -8,12 +8,14 @@ var gm = require('gm')
             .subClass({ imageMagick: true }); // Enable ImageMagick integration.
 var fs  = require('fs');
 var child_process = require('child_process');
+var path = require('path');
 
 process.env['PATH'] += ':' + process.env['LAMBDA_TASK_ROOT'];
 
 // constants
 var MAX_WIDTH  = 200;
 var MAX_HEIGHT = 200;
+var MAX_SIZE = 30 * 1024 * 1024;
 var THUMB_EXT = 'png';
 
 // Handle region
@@ -38,6 +40,20 @@ function exec(command, params, callback) {
 		}
 	);	
 }
+
+function download(s3, bucket, key, downloadPath, range, callback) {
+	console.log('downloading file and writing to ' + downloadPath);
+	if (!fs.existsSync(path.dirname(downloadPath))) 
+		fs.mkdirSync(path.dirname(downloadPath));
+	var file = fs.createWriteStream(downloadPath);
+	file.on('error', function(err) { callback(err); });
+	file.on('close', function() { callback();});
+	s3.getObject({
+		Bucket: bucket,
+		Key: key,
+		Range: range
+	}).createReadStream().pipe(file);
+}
  
 exports.handler = function(event, context) {
 	var s3 = new AWS.S3();
@@ -49,7 +65,8 @@ exports.handler = function(event, context) {
 	var tmpDir 		= "/tmp/";
 	var scratch 	= "scratch/";
 	var downloadPath;
-	
+	var returnObj = { };
+
 	// Infer the file type.
 	var typeMatch = srcKey.match(/\.([^.]*)$/);
 	if (!typeMatch) {
@@ -63,6 +80,8 @@ exports.handler = function(event, context) {
 	switch (fileExt) {
 		case "jpg":
 		case "png":
+		case "tif":
+		//case "jp2":
 			fileType = 'image';
 			break;
 		case "mp4":
@@ -95,9 +114,29 @@ exports.handler = function(event, context) {
 				Key: srcKey
 			}, function(err, data) {
 				if (err) next(err);
-				else if (data.ContentLength > 500 * 1024 * 1024) {
-					console.log('skipping file > 500 MB', bucket, srcKey, data.ContentLength);
-					return;
+				else if (data.ContentLength > MAX_SIZE) {
+					if (fileType == 'image') {
+						// Download first part of file, return dimensions
+						downloadPath = tmpDir + srcKey.replace(/\//g,'-');
+						var range = 'bytes=0-102400';
+						download(s3, bucket, srcKey, downloadPath, range, 
+							function (err) {
+								if (err) context.done(err);
+								console.log('getting dimensions for ' + downloadPath);
+								gm(downloadPath).size(function(err, size) {
+									context.done(err,	
+										{
+											width: size.width, 
+											height: size.height
+										});
+								});
+							});
+					}
+					else 
+					{
+						console.log('skipping file > 500 MB', bucket, srcKey, data.ContentLength);
+						return;
+					}
 				} else next(null);
 			});
 		},
@@ -127,17 +166,9 @@ exports.handler = function(event, context) {
 			});
 		},
 		// Download the file into a file stream
-		function download(next) {
+		function downloadFile(next) {
 			downloadPath = tmpDir + srcKey.replace(/\//g,'-');
-			console.log('downloading file and writing to ' + downloadPath);
-			if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
-			var file = fs.createWriteStream(downloadPath);
-			file.on('error', function(err) { next(err); });
-			file.on('close', function() { next();});
-			s3.getObject({
-				Bucket: bucket,
-				Key: srcKey
-			}).createReadStream().pipe(file);	
+			download(s3, bucket, srcKey, downloadPath, null, next);
 		},
 		function preProcess(next) {
 			var origFile;
@@ -191,6 +222,8 @@ exports.handler = function(event, context) {
 					MAX_WIDTH / size.width,
 					MAX_HEIGHT / size.height
 				);
+				returnObj.width = size.width;
+				returnObj.height = size.height;
 				var width  = scalingFactor * size.width;
 				var height = scalingFactor * size.height;
 				
@@ -209,11 +242,9 @@ exports.handler = function(event, context) {
 				try { fs.unlinkSync(downloadPath); } 
 				catch(e) { console.log("Couldn't delete file", downloadPath, e); } // file is in temp dir anyway
 
-				context.done(err,	
-					{
-						fileType: THUMB_EXT, 
-						buffer: buffer.toString('base64')
-					});
+				returnObj.fileType = THUMB_EXT;
+				returnObj.buffer = buffer.toString('base64');
+				context.done(err,	returnObj);
 			}
 		}
 	);
