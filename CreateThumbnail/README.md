@@ -53,3 +53,12 @@ var event = {
 // Call the Lambda function
 CreateThumbnail.handler(event, context);
 ```
+
+## Packaging
+To package this Lambda, you can use the following
+
+    $ npm run package -- --os=linux
+
+The `os` parameter determines which `ffmpeg` binaries to include. 
+
+Running this script will create a zip file which can be deployed to Lambda.
