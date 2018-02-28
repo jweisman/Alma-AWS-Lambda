@@ -27,6 +27,8 @@ public class DocsToPdfConverter{
 			
 			InputStream inStream = getInFileStream(inFile);
 			OutputStream outStream = getOutFileStream(outFile);
+
+			System.setProperty("user.home","/tmp");
 			
 			if(lowerCaseInPath.endsWith("doc")){
 				converter = new DocToPDFConverter(inStream, outStream, shouldShowMessages, true);
