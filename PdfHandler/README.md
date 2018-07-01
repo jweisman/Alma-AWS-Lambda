@@ -16,6 +16,8 @@ To set up the project for development in Eclipse, run `gradle eclipse`.
 
 To build the project, run `gradle build`.
 
+When deploying to AWS Lambda, deploy as a Java 8 app and set the handler method to `com.exlibrisgroup.alma.PdfConverter::handleRequest`.
+
 # Usage
 This Lambda function expects an object with three parameters:
 * `bucket`: Name of the bucket for the source and destination files.
