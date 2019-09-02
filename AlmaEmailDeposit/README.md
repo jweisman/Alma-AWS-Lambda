@@ -4,8 +4,7 @@ This proof of concept allows deposits to be made to Alma via email. This Lambda 
 
 The process flow is illustrated below:
 
-![Email Deposit Process Flow]
-(https://www.lucidchart.com/publicSegments/view/151babe3-71a2-4f04-ae94-4bec260cd74c/image.png)
+![Email Deposit Process Flow](https://www.lucidchart.com/publicSegments/view/151babe3-71a2-4f04-ae94-4bec260cd74c/image.png)
 
 ## Configuration
 Copy the `config-sample.json` file to `config.json`. Enter the parameters according to your environment.
