@@ -17,6 +17,8 @@ nconf.env()
 
 var apikey = nconf.get('api_key');
 var sworduri = nconf.get('sworduri');
+var sworduser = nconf.get('sworduser');
+var swordpass = nconf.get('swordpass');
 var verification = nconf.get('verification');
 var bucket = nconf.get("bucket");
 var prefix = nconf.get("prefix");
@@ -126,8 +128,8 @@ exports.handler = function(event, context) {
           url: sworduri,
           method: 'POST',
           auth: {
-            user: 'sword',
-            pass: apikey
+            user: sworduser,
+            pass: swordpass
           },
           headers: headers,
           multipart: [{
