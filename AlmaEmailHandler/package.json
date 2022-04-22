@@ -4,7 +4,7 @@
   "description": "Handle emails to Alma via AWS SES & Lambda",
   "dependencies": {
     "async": "^1.5.0",
-    "nconf": "^0.8.2",
+    "nconf": "^0.11.4",
     "mailparser": "~2.7.1",
     "almarestapi-lib": "~1.1.0",
     "node-email-reply-parser": "~0.1.1"
